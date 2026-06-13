@@ -1,0 +1,40 @@
+{
+  "name": "crowdops-ai",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "dev:photon": "mkdir -p .tmp && esbuild agent/photon-agent.ts --bundle --platform=node --format=esm --packages=external --outfile=.tmp/photon-agent.mjs && node .tmp/photon-agent.mjs",
+    "photon:send-test": "mkdir -p .tmp && esbuild scripts/send-photon-test.ts --bundle --platform=node --format=esm --packages=external --outfile=.tmp/send-photon-test.mjs && node .tmp/send-photon-test.mjs",
+    "setup:butterbase": "tsx scripts/setup-butterbase.ts",
+    "seed:butterbase": "tsx scripts/seed-butterbase.ts",
+    "seed:butterbase-rag": "tsx scripts/seed-butterbase-rag.ts",
+    "seed:evermind": "tsx scripts/seed-evermind.ts",
+    "check:vendors": "tsx scripts/check-vendors.ts",
+    "build": "next build",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "next": "latest",
+    "openai": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "spectrum-ts": "latest",
+    "zod": "latest"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.1",
+    "@types/node": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "autoprefixer": "latest",
+    "esbuild": "^0.28.1",
+    "eslint": "latest",
+    "eslint-config-next": "latest",
+    "postcss": "latest",
+    "tailwindcss": "latest",
+    "tsx": "latest",
+    "typescript": "latest"
+  }
+}
