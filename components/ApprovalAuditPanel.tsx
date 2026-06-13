@@ -24,7 +24,7 @@ export function ApprovalAuditPanel({
       <div className="mb-4 flex items-start justify-between gap-4">
         <div>
           <h2 className="text-lg font-extrabold text-slate-950">Human-in-the-loop Approval</h2>
-          <p className="mt-1 text-sm text-slate-500">Approvals update Butterbase actions and audit logs.</p>
+          <p className="mt-1 text-sm text-slate-500">Approvals activate the operating plan and record the decision trail.</p>
         </div>
         {approved ? (
           <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
@@ -61,7 +61,7 @@ export function ApprovalAuditPanel({
         <div className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-3">
           <p className="text-sm font-bold text-emerald-800">Approved via dashboard</p>
           <p className="mt-1 text-xs leading-5 text-emerald-700">
-            Actions updated in Butterbase, audit log written, and Evermind learned memory saved.
+            Approved actions are queued for the team, customer messaging is prepared, and future match-day guidance is updated.
           </p>
         </div>
       ) : null}

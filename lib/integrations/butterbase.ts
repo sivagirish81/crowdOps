@@ -149,6 +149,13 @@ function rowToPhotonMessage(row: Row): PhotonMessageRecord {
   };
 }
 
+function isOfficialWorldCupScheduleMatch(match: MatchEvent) {
+  const suffix = match.id.match(/000000000(\d{3})$/)?.[1];
+  if (!suffix) return false;
+  const gameNumber = Number(suffix);
+  return gameNumber >= 1 && gameNumber <= 104;
+}
+
 class HttpButterbaseAdapter implements ButterbaseAdapter {
   private readonly baseUrl: string;
   private readonly appId: string;
@@ -255,6 +262,9 @@ class HttpButterbaseAdapter implements ButterbaseAdapter {
     );
     const ranked = (candidates.length > 0 ? candidates : matches).sort((a, b) => {
       const now = Date.now();
+      const aOfficial = isOfficialWorldCupScheduleMatch(a);
+      const bOfficial = isOfficialWorldCupScheduleMatch(b);
+      if (aOfficial !== bOfficial) return aOfficial ? -1 : 1;
       const aDistance = Math.abs(new Date(a.startsAt).getTime() - now);
       const bDistance = Math.abs(new Date(b.startsAt).getTime() - now);
       if (aDistance !== bDistance) return aDistance - bDistance;

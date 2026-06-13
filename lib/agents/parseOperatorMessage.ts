@@ -9,7 +9,7 @@ export type ParsedCommand = {
 };
 
 export function parseOperatorMessage(text: string): ParsedCommand {
-  const lower = text.toLowerCase();
+  const lower = text.toLowerCase().replace(/[’‘]/g, "'");
   const operatorType: OperatorType = lower.includes("fan zone")
     ? "fan_zone"
     : lower.includes("hotel")
@@ -35,7 +35,7 @@ export function parseOperatorMessage(text: string): ParsedCommand {
     return { command: "memory", operatorType, note: text };
   }
 
-  if (/(what'?s happening|whats happening|who'?s winning|whose winning|score|winning|offer|offers|promo|promotion|discount|deal|happy hour|should i|can i|what do i do next)/.test(lower)) {
+  if (/(what'?s happening|whats happening|happening in (the )?match|who'?s winning|whose winning|score|winning|penalty|wings|suggest|suggestion|idea|offer|offers|promo|promotion|discount|deal|happy hour|tomorrow|next day|next match day|plan for|should i|can i|what do i do next)/.test(lower)) {
     return { command: "followup", operatorType, note: text };
   }
 

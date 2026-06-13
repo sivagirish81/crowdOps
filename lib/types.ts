@@ -12,6 +12,7 @@ export type RiskLevel =
 
 export type SignalSource =
   | "world_cup_schedule"
+  | "world_cup_live"
   | "weather"
   | "transit"
   | "news"
@@ -51,6 +52,28 @@ export interface Signal {
   summary: string;
   raw?: unknown;
   createdAt: string;
+}
+
+export interface WorldCupLiveMatchState {
+  provider: "worldcup2026";
+  providerUrl: string;
+  matchId?: string;
+  homeTeam: string;
+  awayTeam: string;
+  homeScore?: number;
+  awayScore?: number;
+  status: "upcoming" | "live" | "finished" | "unavailable";
+  timeElapsed?: string;
+  homeScorers: string[];
+  awayScorers: string[];
+  penaltyEvents: Array<{
+    team: string;
+    scorer: string;
+    raw: string;
+  }>;
+  summary: string;
+  unavailableReason?: string;
+  updatedAt: string;
 }
 
 export interface RetrievedPolicy {

@@ -48,15 +48,21 @@ async function main() {
     }
 
     await space.responding(async () => {
-      const response = await handlePhotonMessage({
-        text,
-        sender: message.sender?.id ?? "imessage-operator",
-        threadId: space.id,
-        externalMessageId: message.id
-      });
+      try {
+        const response = await handlePhotonMessage({
+          text,
+          sender: message.sender?.id ?? "imessage-operator",
+          threadId: space.id,
+          externalMessageId: message.id
+        });
 
-      await message.reply(response.text);
-      console.log("CrowdOps outbound reply sent", { platform: message.platform, spaceId: space.id, messageId: message.id });
+        await message.reply(response.text);
+        console.log("CrowdOps outbound reply sent", { platform: message.platform, spaceId: space.id, messageId: message.id });
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : "Unknown error";
+        console.error("CrowdOps message handling failed", { platform: message.platform, spaceId: space.id, messageId: message.id, detail });
+        await message.reply(`CrowdOps hit an integration error while processing that message. ${detail}`);
+      }
     });
   }
 }

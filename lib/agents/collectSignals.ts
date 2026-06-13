@@ -4,6 +4,7 @@ import { getButterbaseAdapter } from "../integrations/butterbase";
 import { getNewsSignal } from "../integrations/gdelt";
 import { getTransitSignal } from "../integrations/gtfs";
 import { getWeatherSignal } from "../integrations/openMeteo";
+import { getWorldCupLiveSignal } from "../integrations/worldcup2026";
 import type { MatchEvent, OperatorType, Signal } from "../types";
 
 export async function collectSignals(input: {
@@ -26,13 +27,14 @@ export async function collectSignals(input: {
     createdAt: new Date().toISOString()
   };
 
-  const [weather, news, transit] = await Promise.all([
+  const [liveMatch, weather, news, transit] = await Promise.all([
+    getWorldCupLiveSignal(input.match),
     getWeatherSignal(city, input.match),
     getNewsSignal(city, input.match),
     getTransitSignal(city)
   ]);
 
-  const signals = [matchSignal, weather, news, { ...transit, matchId: input.match.id }];
+  const signals = [matchSignal, liveMatch, weather, news, { ...transit, matchId: input.match.id }];
   const butterbase = getButterbaseAdapter();
   await Promise.all(signals.map((signal) => butterbase.saveSignal(signal)));
   return signals;

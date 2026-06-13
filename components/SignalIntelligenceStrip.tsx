@@ -32,6 +32,7 @@ export function SignalIntelligenceStrip({
   memories: MemoryRecord[];
 }) {
   const weather = signalBySource(signals, "weather");
+  const liveMatch = signalBySource(signals, "world_cup_live");
   const news = signalBySource(signals, "news");
   const transit = signalBySource(signals, "transit");
   const topPolicy = policies[0];
@@ -43,6 +44,12 @@ export function SignalIntelligenceStrip({
       body: match ? `${match.homeTeam} vs ${match.awayTeam}` : "Waiting for match",
       meta: match ? `${match.expectedDemand.replace("_", " ")} demand` : "Run analysis",
       badge: <SourceBadge source="world_cup_schedule" />
+    },
+    {
+      title: "Live",
+      body: liveMatch?.summary ?? "Live score feed will attach when the WorldCup 2026 API responds.",
+      meta: "worldcup26.ir",
+      badge: liveMatch ? severityBadge(liveMatch.severity) : <SourceBadge source="world_cup_live" />
     },
     {
       title: "Weather",
@@ -78,7 +85,7 @@ export function SignalIntelligenceStrip({
           <p className="text-sm text-slate-500">The context that grounds the operating plan.</p>
         </div>
       </div>
-      <div className="grid gap-3 md:grid-cols-5">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
         {cards.map((card) => (
           <article key={card.title} className="min-w-0 rounded-2xl border border-slate-200 bg-slate-50 p-4 shadow-sm">
             <div className="mb-3 flex items-center justify-between gap-2">

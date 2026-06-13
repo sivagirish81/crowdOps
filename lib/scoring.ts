@@ -49,6 +49,11 @@ export function computeRiskScore(input: {
   }
 
   const sourceScores: Record<string, [number, string][]> = {
+    world_cup_live: [
+      [hasSeverity(input.signals, "world_cup_live", "critical") ? 20 : 0, "Critical live match event detected."],
+      [hasSeverity(input.signals, "world_cup_live", "high") ? 15 : 0, "High-impact live match event detected."],
+      [hasSeverity(input.signals, "world_cup_live", "medium") ? 8 : 0, "Live match is underway."]
+    ],
     weather: [
       [hasSeverity(input.signals, "weather", "critical") ? 20 : 0, "Critical weather signal detected."],
       [hasSeverity(input.signals, "weather", "high") ? 15 : 0, "High weather risk detected."],
@@ -76,24 +81,24 @@ export function computeRiskScore(input: {
 
   if (input.memories.length > 0) {
     score += 10;
-    reasons.push("Evermind returned similar operational memories.");
+    reasons.push("Similar operational memories were found.");
   }
 
   const memoryText = input.memories.map((memory) => `${memory.title} ${memory.content}`).join(" ").toLowerCase();
   if (/(demand spike|congestion|delay|rain|staffing|queue|escalation)/.test(memoryText)) {
     score += 15;
-    reasons.push("Evermind memory mentions demand, congestion, delay, rain, staffing, queue, or escalation.");
+    reasons.push("Prior event context mentions demand, congestion, delay, rain, staffing, queue, or escalation.");
   }
 
   if (input.policies.length > 0) {
     score += 5;
-    reasons.push("Butterbase RAG returned relevant operating policies.");
+    reasons.push("Relevant operating policies were retrieved.");
   }
 
   const policyText = input.policies.map((policy) => `${policy.title} ${policy.excerpt}`).join(" ").toLowerCase();
   if (/(approval|immediate|requires|escalat)/.test(policyText)) {
     score += 10;
-    reasons.push("Butterbase policy requires approval or immediate action.");
+    reasons.push("Operating policy requires approval or immediate action.");
   }
 
   const clamped = Math.max(0, Math.min(100, score));

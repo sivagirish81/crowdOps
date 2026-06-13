@@ -2,6 +2,7 @@ import type { SignalSource } from "../lib/types";
 
 const labels: Record<SignalSource, string> = {
   world_cup_schedule: "World Cup",
+  world_cup_live: "Live Match",
   weather: "Weather",
   transit: "Transit",
   news: "News",

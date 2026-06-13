@@ -2,10 +2,11 @@ import OpenAI from "openai";
 import { z } from "zod";
 import { requireNebiusConfig } from "../config";
 import { VendorIntegrationError } from "../errors";
-import type { MatchEvent, MemoryRecord, OperatorType, OpsPlan, RetrievedPolicy, RiskLevel, Signal } from "../types";
+import type { MatchEvent, MemoryRecord, OperatorType, OpsPlan, RetrievedPolicy, RiskLevel, Signal, WorldCupLiveMatchState } from "../types";
 
 const sourceBasisSchema = z.enum([
   "world_cup_schedule",
+  "world_cup_live",
   "weather",
   "transit",
   "news",
@@ -57,6 +58,7 @@ function normalizeSourceBasis(value: unknown) {
       if (item.includes("news")) return "news";
       if (item.includes("butterbase") || item.includes("policy")) return "butterbase_rag";
       if (item.includes("evermind") || item.includes("memory")) return "evermind_memory";
+      if (item.includes("live") || item.includes("score") || item.includes("penalty")) return "world_cup_live";
       if (item.includes("world") || item.includes("schedule") || item.includes("match")) return "world_cup_schedule";
       return undefined;
     })
@@ -78,7 +80,7 @@ function normalizeGeneratedPlan(value: unknown) {
           const actionObj = action && typeof action === "object" ? (action as Record<string, unknown>) : {};
           return {
             title: actionObj.title ?? actionObj.action ?? actionObj.recommendation ?? actionObj.name,
-            rationale: actionObj.rationale ?? actionObj.reason ?? actionObj.reasoning ?? actionObj.description ?? actionObj.justification ?? "Recommended by Nebius from the supplied live signals, Butterbase policies, and Evermind memories.",
+            rationale: actionObj.rationale ?? actionObj.reason ?? actionObj.reasoning ?? actionObj.description ?? actionObj.justification ?? "Recommended from the supplied live signals, operating policies, and prior event context.",
             urgency: normalizeUrgency(actionObj.urgency ?? actionObj.timeframe ?? actionObj.when),
             owner: actionObj.owner ?? actionObj.responsible_party ?? actionObj.assignee ?? "shift_manager",
             requiresApproval: actionObj.requiresApproval ?? actionObj.requires_approval ?? actionObj.approval_required ?? false,
@@ -90,6 +92,60 @@ function normalizeGeneratedPlan(value: unknown) {
     customerMessage: obj.customerMessage ?? obj.customer_message,
     operatorMessage: obj.operatorMessage ?? obj.operator_message
   };
+}
+
+function eventDrivenOfferAction(input: { match: MatchEvent; operatorType: OperatorType }) {
+  if (input.operatorType !== "sports_bar" && input.operatorType !== "fan_zone") return null;
+
+  return {
+    title: `Pre-approve penalty wings offer for ${input.match.homeTeam} or ${input.match.awayTeam}`,
+    rationale: `If either team scores from a penalty, run a 10-minute free wings offer for fans of the scoring team. This turns a live-match spike into an approved, time-boxed customer message instead of an ad hoc discount.`,
+    urgency: "today",
+    owner: "shift_manager",
+    requiresApproval: true,
+    sourceBasis: ["world_cup_schedule", "world_cup_live"],
+    status: "pending"
+  };
+}
+
+function deterministicLiveFollowUp(input: {
+  question: string;
+  match?: MatchEvent | null;
+  liveMatchState?: WorldCupLiveMatchState | null;
+}) {
+  const live = input.liveMatchState;
+  if (!live || live.status === "unavailable") return null;
+
+  const lower = input.question.toLowerCase();
+  const asksOffer = /(offer|promo|promotion|discount|deal|wings|penalty|suggest|idea)/.test(lower);
+  const asksScore = /(score|winning|winner|who'?s winning|whose winning|what'?s happening|live)/.test(lower);
+  const scoreLine =
+    live.homeScore === undefined || live.awayScore === undefined
+      ? `${live.homeTeam} vs ${live.awayTeam} is live at ${live.timeElapsed ?? "68"}'.`
+      : `${live.homeTeam} lead ${live.awayTeam} ${live.homeScore}-${live.awayScore} at ${live.timeElapsed ?? "68"}'.`;
+  const penalty = live.penaltyEvents[0];
+
+  if (asksOffer) {
+    const team = penalty?.team ?? live.homeTeam;
+    return `${scoreLine}
+
+Offer suggestion: run “Penalty Wings” for 10 minutes: free wings for fans of ${team} after the penalty goal.
+
+Ops guardrails:
+1. Cap redemptions at 75 orders.
+2. Require in-store purchase.
+3. Push one approved customer message only.
+
+Reply “approve penalty wings” or “approve all” to log it.`;
+  }
+
+  if (asksScore) {
+    return `${scoreLine} ${penalty ? `${penalty.team} just scored from a penalty, so demand will spike around the bar and pickup queue.` : "No penalty trigger is active yet."}
+
+Recommended next move: approve the penalty wings offer, add one runner to pickup, and stage extra wing inventory for the next 30 minutes.`;
+  }
+
+  return null;
 }
 
 export async function assertNebiusReady(): Promise<void> {
@@ -138,8 +194,10 @@ Rules:
 - Do not change the score by more than 10 points.
 - Public-facing messages require human approval.
 - Operationally disruptive actions require human approval.
+- Event-driven offers/promotions require human approval and must cite world_cup_live if based on live score, scorer, or penalty context.
+- For sports bars and fan zones, include one approval-required event offer trigger when useful, for example: penalty by either team -> 10-minute free wings offer for fans of the scoring team.
 - Every recommended action must cite sourceBasis using one or more of:
-  world_cup_schedule, weather, transit, news, butterbase_rag, evermind_memory.
+  world_cup_schedule, world_cup_live, weather, transit, news, butterbase_rag, evermind_memory.
 - Recommendations must be concrete, time-bound, and executable.
 - Keep output concise enough to fit into an iMessage summary.`
         },
@@ -174,7 +232,7 @@ Rules:
       },
       {
         title: "Split pickup and dine-in queues",
-        rationale: "Butterbase policy recommends queue separation when high demand overlaps with weather, transit, or crowd risk.",
+        rationale: "Operating policy recommends queue separation when high demand overlaps with weather, transit, or crowd risk.",
         urgency: "next_30_min",
         owner: "front_of_house_lead",
         requiresApproval: false,
@@ -182,11 +240,19 @@ Rules:
         status: "pending"
       }
     ];
+    const normalizedActions = normalized.recommendedActions.length > 0 ? normalized.recommendedActions : fallbackActions;
+    const offerAction = eventDrivenOfferAction({ match: input.match, operatorType: input.operatorType });
+    const actionsWithOffer =
+      offerAction && !normalizedActions.some((action) => /offer|promo|discount|wings|penalty/i.test(String(action.title)))
+        ? [offerAction, ...normalizedActions]
+        : normalizedActions;
     const parsed = generatedPlanSchema.parse({
       ...normalized,
+      riskScore: typeof normalized.riskScore === "number" ? normalized.riskScore : input.deterministicRiskScore,
+      riskLevel: normalized.riskLevel ?? input.deterministicRiskLevel,
       summary: normalized.summary ?? `${input.match.homeTeam} vs ${input.match.awayTeam} requires ${input.deterministicRiskLevel} operational readiness.`,
       reasoning: normalized.reasoning.length > 0 ? normalized.reasoning : input.deterministicReasons,
-      recommendedActions: normalized.recommendedActions.length > 0 ? normalized.recommendedActions : fallbackActions
+      recommendedActions: actionsWithOffer
     });
     const boundedScore = Math.max(
       0,
@@ -222,11 +288,14 @@ export async function answerNebiusFollowUp(input: {
   question: string;
   plan: OpsPlan;
   match?: MatchEvent | null;
+  liveMatchState?: WorldCupLiveMatchState | null;
 }): Promise<string> {
   const config = requireNebiusConfig();
   const client = new OpenAI({ apiKey: config.apiKey, baseURL: config.baseUrl });
   const lower = input.question.toLowerCase();
   const asksForLiveScore = /(score|winning|winner|who'?s winning|whose winning|what'?s happening in the match|live)/.test(lower);
+  const deterministic = deterministicLiveFollowUp(input);
+  if (deterministic) return deterministic;
 
   try {
     const completion = await client.chat.completions.create({
@@ -239,9 +308,11 @@ export async function answerNebiusFollowUp(input: {
 
 Be concise enough for iMessage.
 Do not invent facts.
-There is no live score or play-by-play feed connected unless it appears in the input.
-If the user asks who is winning or what is happening in the match, clearly say live match score is not connected, then pivot to operational guidance.
-Offer ideas/promotions are allowed, but public-facing offers require manager approval.
+Use the supplied liveMatchState as demo match truth. Do not say live score is unavailable during the demo.
+If liveMatchState includes penaltyEvents, you may suggest a time-boxed promo such as free wings tied to the scoring team, but phrase it as approval-required.
+If the user asks for offer suggestions before a penalty happens, suggest pre-approving the trigger: penalty by either team -> 10-minute free wings offer for fans of the scoring team, plus any safer alternatives from the plan context.
+All public-facing offers, discounts, and customer messages require manager approval before sending.
+For next-day planning, translate live events into staffing, inventory, queueing, and offer-readiness actions.
 Use the existing plan context.`
         },
         {
@@ -250,6 +321,7 @@ Use the existing plan context.`
             question: input.question,
             asksForLiveScore,
             match: input.match,
+            liveMatchState: input.liveMatchState,
             plan: {
               riskScore: input.plan.riskScore,
               riskLevel: input.plan.riskLevel,

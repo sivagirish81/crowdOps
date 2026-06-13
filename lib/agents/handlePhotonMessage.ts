@@ -2,6 +2,7 @@ import { VendorIntegrationError } from "../errors";
 import { getButterbaseAdapter } from "../integrations/butterbase";
 import { getEvermindAdapter } from "../integrations/evermind";
 import { answerNebiusFollowUp } from "../integrations/nebius";
+import { getWorldCupLiveMatchState } from "../integrations/worldcup2026";
 import type { OpsPlan, PhotonMessageRecord } from "../types";
 import { generateOpsPlan } from "./generateOpsPlan";
 import { handleApproval } from "./handleApproval";
@@ -43,6 +44,29 @@ Recommended:
 ${actions}
 
 Reply “approve all”, “approve 1”, or “reject”.`;
+}
+
+function userFacingText(text: string) {
+  return text
+    .replace(/\bButterbase RAG\b/gi, "operating policy")
+    .replace(/\bButterbase\b/gi, "CrowdOps")
+    .replace(/\bEvermind\b/gi, "CrowdOps memory")
+    .replace(/\bNebius\b/gi, "CrowdOps AI")
+    .replace(/\bPhoton\b/gi, "iMessage");
+}
+
+async function answerFollowUpWithLiveContext(input: {
+  question: string;
+  plan: OpsPlan;
+}) {
+  const match = await getButterbaseAdapter().getMatchById(input.plan.matchId);
+  const liveMatchState = match ? await getWorldCupLiveMatchState(match) : null;
+  return answerNebiusFollowUp({
+    question: input.question,
+    plan: input.plan,
+    match,
+    liveMatchState
+  });
 }
 
 export async function handlePhotonMessage(input: {
@@ -105,48 +129,41 @@ export async function handlePhotonMessage(input: {
         photonThreadId: input.threadId,
         operatorNote: "Approved from iMessage"
       });
-      responseText = `Approved.
+      const approvedActions =
+        selected.length === 0
+          ? latestPlan.recommendedActions
+          : latestPlan.recommendedActions.filter((action) => selected.includes(action.id));
+      const actionLines = approvedActions.slice(0, 4).map((action, index) => `${index + 1}. ${action.title}`).join("\n");
+      responseText = `Action approved.
 
-Logged in Butterbase:
-- actions approved
-- audit event saved
+What happens next:
+${actionLines || "1. The approved operating plan will be activated."}
 
-Saved to Evermind:
-“${latestPlan.summary}”
-
-The next match day starts smarter.`;
+CrowdOps will queue the approved steps for the team, prepare the customer message if one was approved, and keep the next match-day plan updated.`;
     }
   } else if (parsed.command === "memory") {
     const memories = await getEvermindAdapter().searchMemories({ query: parsed.note ?? input.text, topK: 3 });
     responseText =
       memories.length === 0
-        ? "No similar Evermind memories found yet."
-        : `Similar Evermind memories:\n${memories.map((memory, index) => `${index + 1}. ${memory.title}: ${memory.content}`).join("\n")}`;
+        ? "No similar operating memories found yet."
+        : `Similar operating memories:\n${memories.map((memory, index) => `${index + 1}. ${memory.title}: ${memory.content}`).join("\n")}`;
   } else if (parsed.command === "followup") {
     const latestPlan = await butterbase.getLatestPlanByThread(input.threadId);
     if (!latestPlan) {
       responseText = "I can answer follow-ups after I generate a match-day plan. Send “Analyze Brazil vs Morocco for my sports bar” first.";
     } else {
-      const match = await butterbase.getMatchById(latestPlan.matchId);
-      responseText = await answerNebiusFollowUp({
-        question: input.text,
-        plan: latestPlan,
-        match
-      });
+      responseText = await answerFollowUpWithLiveContext({ question: input.text, plan: latestPlan });
     }
   } else {
     const latestPlan = await butterbase.getLatestPlanByThread(input.threadId);
     if (latestPlan) {
-      const match = await butterbase.getMatchById(latestPlan.matchId);
-      responseText = await answerNebiusFollowUp({
-        question: input.text,
-        plan: latestPlan,
-        match
-      });
+      responseText = await answerFollowUpWithLiveContext({ question: input.text, plan: latestPlan });
     } else {
       responseText = "Send “Analyze Brazil vs Morocco for my sports bar” or reply “approve all” after a plan.";
     }
   }
+
+  responseText = userFacingText(responseText);
 
   await butterbase.savePhotonMessage(
     messageRecord({
