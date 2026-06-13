@@ -8,6 +8,14 @@ export type ParsedCommand = {
   note?: string;
 };
 
+function cleanMatchQuery(value: string) {
+  return value
+    .replace(/^(analy[sz]e|analyse|check|risk plan for|risk plan|before)\s+/i, "")
+    .replace(/\s+for my\s+.+$/i, "")
+    .replace(/\?+$/g, "")
+    .trim();
+}
+
 export function parseOperatorMessage(text: string): ParsedCommand {
   const lower = text.toLowerCase().replace(/[’‘]/g, "'");
   const operatorType: OperatorType = lower.includes("fan zone")
@@ -42,10 +50,11 @@ export function parseOperatorMessage(text: string): ParsedCommand {
   if (/(analy[sz]e|analyse|check|risk plan|what should i do|game|match|brazil|morocco|moroncco)/.test(lower)) {
     const versus = text.match(/([A-Za-z ]+)\s+v(?:s|\.)?\s+([A-Za-z ]+)/i);
     const forMy = text.match(/(?:analy[sz]e|analyse|check|risk plan for|before)\s+(.+?)(?:\s+for my|\?|$)/i);
+    const matchQuery = versus ? `${cleanMatchQuery(versus[1])} ${cleanMatchQuery(versus[2])}` : forMy?.[1]?.trim() ?? text;
     return {
       command: "analyze",
       operatorType,
-      matchQuery: versus ? `${versus[1].trim()} ${versus[2].trim()}` : forMy?.[1]?.trim() ?? text
+      matchQuery
     };
   }
 

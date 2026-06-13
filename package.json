@@ -12,7 +12,8 @@
     "seed:evermind": "tsx scripts/seed-evermind.ts",
     "check:vendors": "tsx scripts/check-vendors.ts",
     "build": "next build",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test": "vitest run"
   },
   "dependencies": {
     "dotenv": "^17.4.2",
@@ -35,6 +36,7 @@
     "postcss": "latest",
     "tailwindcss": "latest",
     "tsx": "latest",
-    "typescript": "latest"
+    "typescript": "latest",
+    "vitest": "^3.2.6"
   }
 }
